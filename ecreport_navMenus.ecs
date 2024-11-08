@@ -1,0 +1,551 @@
+@share
+@pageTitle.setValue(Navigation Menus)
+<ec:module comp_input_entity/>
+<ec:var fname = @svr[param/fname].nullifblank/>
+
+@COMMENT(REMEMBER TO DO ACCESS RIGHTS)
+
+<ec:object dt_navMenus page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>menuID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@recordID)>
+            SELECT websiteID, menuID, menuDescription, dbo.fn_entityName(102, websiteID) AS ownerName
+            FROM menus
+            WHERE 1=1
+
+            @if(@iv(@fname)|AND @SQLKeywordClause(@sqlesc(%@fname%).replace('|'')|menus.menuDescription))
+        </ec:case>
+
+
+        <ec:case if=@iv(@recordID)>
+            SELECT websiteID, menuID, menuDescription
+            FROM menus
+            WHERE menuID = @recordID.asInt.alt(0)
+        </ec:case>
+    </sqlSelect>
+    <sort>menuDescription ASC</sort>
+</ec:object>
+<ec:object obj_menus_pageNavigator dataObj=@dt_navMenus type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_navMenus dataObj=@dt_navMenus type="tComponent">
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_navMenu_new"><ec:icon title="Create New Navigation Menu" icon="plus"/></a>
+    </ec:options>
+
+    <ec:titlebox title="Navigation Menus" options=@options>
+        <table class="tbl">
+            <tr>
+                <th>Menu Name</th>
+                <th style="text-align:left;">Owner</th>
+            </tr>
+
+        <ec:loop data=@dataObj.dataDef[data]>
+            <tr class="anchorify" href="/console?ltid=105&xid=13&recordID=@rs[menuID]">
+                <td>@rs[menuDescription]</td>
+                <td style="text-align:left;"><a href="/console?ltid=102&xid=@rs[websiteID]&xltid=@LTID&xxid=@XID">@rs[ownerName]</a></td>
+            </tr>
+        </ec:loop>
+        </table>
+
+        @obj_menus_pageNavigator()
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+<ec:object obj_navMenu dataObj=@dt_navMenus type="tComponent">
+    <ec:var aMenu=@dataObj.dataDef[data/1]/>
+
+    <ec:var options/>
+    <ec:options>
+        <a href="/console?ltid=@LTID&xid=@XID" rel="nofollow"><ec:icon title="View Other Records" icon="th-list"/></a>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_navMenu_delete" confirm="Are you sure you wish to delete this navigation menu?"><ec:icon title="Delete Navigation Menu" icon="remove-sign"/></a>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_navMenu_edit"><ec:icon title="Edit Navigation Menu" icon="pencil"/></a>
+    </ec:options>
+
+    <ec:titlebox title="Navigation Menu" options=@options>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="Name" content="@aMenu[menuDescription]"/>
+                <ec:var ownerContent/><ec:ownerContent><ec:input_entity fieldLTID="102" fieldXID=@aMenu[websiteID] filterLTID="102" labeless=1 disabled=1/></ec:ownerContent>
+                <ec:displayField title="Owner" content=@ownerContent/>
+            </div>
+        </div>
+    </ec:titlebox>
+
+    <ec:data dt_menuItems connection=@connection>
+        SELECT menuItemID, parentMenuItemID, description, LTID, XID, URL, iconURL, level
+        FROM dbo.tb_menuItems_full(@recordID.alt(0).asInt)
+    </ec:data>
+
+    <style>
+        #aMenu-items {
+            display:block;
+            width:98%;
+            margin:auto;
+
+            & .aMenu-item {
+                height:32px;
+                margin-bottom:7px;
+                box-shadow:var(--box-shadow);
+                border-radius:9px 5px 5px 9px;
+                padding:2px;
+
+                & .aMenu-item-dragbar {
+                    display:inline-block;
+                    width:20px; height:25px;
+                    writing-mode: vertical-lr;
+                    text-orientation: mixed;
+                    cursor:grab;
+
+                    & :nth-child(2n) {position:relative; left:-9px;}
+                }
+                
+                & .aMenu-item-content {
+                    display:inline-block;
+                    width:calc(100% - 24px); height:25px;
+                    vertical-align:top;
+                    line-height:32px;
+                    padding-left:7px;
+
+                    & .aMenu-item-img {height:25px; vertical-align:top; margin-top:1px;}
+                    & .aMenu-item-options {display:inline-block; float:right; margin-top:3px;}
+                }
+            }
+
+            <ec:case if=@userSettings[theme].is(light)>
+                & .aMenu-item {
+                    border-left:1px solid rgba(0,0,0,.05);
+                    background-color:#fafafa;
+                }
+            </ec:case>
+            <ec:case if=@userSettings[theme].is(dark)>
+                & .aMenu-item {
+                    border-left:1px solid #45484a;
+                    background-color:#313131;
+                }
+            </ec:case>
+
+            #aMenu-item-atTop, #aMenu-item-atBottom, #aMenu-item-childDrop {
+                & span {
+                    display:block;
+                    width:100%; line-height:28px;
+                    text-align:center; font-style:italic;
+                    opacity:.4;
+                }
+                &.over {
+                    & span {opacity:1;}
+                }
+            }
+        }
+    </style>
+
+    <div id="aMenu-items">
+        <ec:var categoryMenuItemID=@null/>
+
+        <ec:case if=@dt_menuItems.count.isGreaterThan(1)>
+            <div class="aMenu-item dragTarget" ecid="obj_navMenu_dragReorder" act="setToMenuTop" id="aMenu-item-atTop" style="width:100%; margin-left:0px;">
+                <!-- for top of menu -->
+                <span>Move item to top</span>
+            </div><br/>
+        </ec:case>
+        
+    
+        <ec:loop data=@dt_menuItems>
+            <ec:case if=@all(@not(@rs.isFirst)|@rs[parentMenuItemID].isnull) rem="previous item was last in 'category'">
+                <div class="aMenu-item dragTarget" id="aMenu-item-childDrop" toGenericID="@categoryMenuItemID" loader="#aMenu-items" ecid="obj_navMenu_dragReorder" act="setParentMenuItem" style="width:calc(100% - 16)px; margin-left:16px;">
+                    <span>Move item into category</span>
+                </div><br/>
+            </ec:case>
+
+            <div class="aMenu-item draggable dragTarget" toGenericID="@rs[menuItemID]" fromGenericID="@rs[menuItemID]" loader="#aMenu-items" ecid="obj_navMenu_dragReorder" id="aMenu-item-@rs[menuItemID]" style="width:calc(100% - @calc(@rs[level] * 16)px); margin-left:calc(@calc(@rs[level] * 16)px);">
+                <div class="aMenu-item-dragbar" title="Click and drag to reorder menu items">
+                    <span>&nbsp;.&nbsp;.&nbsp;.</span>
+                    <span>&nbsp;.&nbsp;.&nbsp;.</span>
+                </div>
+                
+                <div class="aMenu-item-content">
+                    <ec:case if=@iv(@rs[iconURL])><img class="aMenu-item-img" src="@rs[iconURL]" alt="LTID @rs[LTID] / XID @rs[XID]"/></ec:case>
+                    <ec:case if=@not(@rs[URL].contains(javascript))><a class="aMenu-item-text" href="@rs[URL]" target="_blank">@rs[description]</a></ec:case>
+                    <ec:case if=@rs[URL].contains(javascript)><span class="aMenu-item-text">@rs[description]</span></ec:case>
+                    <div class="aMenu-item-options">
+                        <a class="aMenu-item-delete ajaxClick" href="javascript:void(0)" ecid="obj_menuItem_delete" menuItemID="@rs[menuItemID]" loader="#aMenu-item-@rs[menuItemID]"><ec:icon title="Delete menu item" icon="remove" direction="right" size="xsml"/></a>
+                        <a class="aMenu-item-edit ajaxClick" href="javascript:void(0)" ecid="obj_menuItem_edit" menuItemID="@rs[menuItemID]"><ec:icon title="Edit menu item" icon="pencil" direction="right" size="sml"/></a>
+                        <a class="aMenu-item-addChild ajaxClick" href="javascript:void(0)" ecid="obj_menuItem_new" parentMenuItemID="@rs[menuItemID]"><ec:icon title="Add child menu item" icon="plus" direction="right" size="xsml"/></a>
+                    </div>
+                </div>
+            </div>
+
+            <ec:case if=@all(@rs.isLast|@dt_menuItems.count.isGreaterThan(1))>
+                <div class="aMenu-item dragTarget" id="aMenu-item-childDrop" toGenericID="@categoryMenuItemID" loader="#aMenu-items" ecid="obj_navMenu_dragReorder" act="setParentMenuItem" style="width:calc(100% - 16)px; margin-left:16px;">
+                    <span>Move item into category</span>
+                </div>
+            </ec:case>
+
+            @comment(set at end since this is used by the next item in loop but not this one)
+            <ec:set categoryMenuItemID=@rs[menuItemID] if=@rs[parentMenuItemID].isnull rem="root level elements are the categories"/>
+        </ec:loop>
+
+        
+        <ec:case if=@dt_menuItems.count.isGreaterThan(1)>
+            <br/><div class="aMenu-item dragTarget" ecid="obj_navMenu_dragReorder" act="setToMenuBottom" id="aMenu-item-atBottom" style="width:100%; margin-left:0px;">
+                <!-- for bottom of menu -->
+                <span>Move item to bottom</span>
+            </div>
+        </ec:case>
+    </div>
+</ec:object>
+
+
+
+
+
+<ec:object obj_navMenu_dragReorder type="tComponent">
+    <ec:var toMenuItemID = @svr[param/toGenericID].nullifblank/>
+    <ec:var fromMenuItemID = @svr[param/fromGenericID].nullifblank/>
+
+    <ec:data xx procedure="pr_menuItems_swap" connection=@connection>
+        <action>@if(@act.is(dragDrop)|dragSwap|@act)</action>
+        <toMenuItemID>@toMenuItemID.asInt</toMenuItemID>
+        <fromMenuItemID>@fromMenuItemID.asInt</fromMenuItemID>
+    </ec:data>
+
+    <ec:set errMsg = @xx[errorMessage].nullifblank/>
+    @if(@iv(@errMsg)|@notification(@errMsg))
+
+    <ec:case if=@nv(@errMsg)>
+        @dt_navMenus.refresh()
+        @obj_navMenu.refresh()
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_navMenu_new title="New Navigation Menu" type="tDialogForm">
+    <ec:var menuName = @svr[param/menuName].nullifblank/>
+    <ec:var ownedBySiteID = @svr[param/x_ownedBySiteID].nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@menuName)|@iv(@ownedBySiteID))>
+            <ec:data xx procedure="pr_menu_new" connection=@connection>
+                <menuName>@menuName</menuName>
+                <ownerWebsiteID>@ownedBySiteID.asInt</ownerWebsiteID>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+            <ec:var newNavID = @xx[newNavMenuID].nullifblank/>
+
+            <ec:case if=@nv(@errMsg)>
+                @logAction(2|@LTID|@XID|New Nav Menu ID: @newNavID)
+                @notification(Nav Menu NAV-@newNavID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@XID&recordID=@newNavID)
+                @close()
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg="A name / description and owner-websiteID are both required to create a menu."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Menu Name / Description" id="menuName" name="menuName" fieldValue=@menuName.alt(Menu @today.formatDate(yyyy-mm-dd))/>
+        <ec:input_entity title="Owned By Site" id="ownedBySiteID" name="ownedBySiteID" fieldLTID=102 fieldXID=@ownedBySiteID.alt(@websiteID) filterLTID="102"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_navMenu_edit title="Edit Navigation Menu" type="tDialogForm">
+    <ec:var menuName = @svr[param/menuName].nullifblank/>
+    <ec:var ownedBySiteID = @svr[param/x_ownedBySiteID].nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@menuName)|@iv(@ownedBySiteID))>
+            <ec:data xx procedure="pr_menu_edit" connection=@connection>
+                <menuID>@recordID.asInt</menuID>
+                <menuName>@menuName</menuName>
+                <ownerWebsiteID>@ownedBySiteID.asInt</ownerWebsiteID>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@nv(@errMsg)>
+                @logAction(3|@LTID|@XID|Edit menuID: @recordID)
+                @dt_navMenus.refresh()
+                @obj_navMenu.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg="A name / description and owner-websiteID are both required to edit a menu."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_menu connection=@connection>
+            SELECT menuDescription, websiteID
+            FROM menus
+            WHERE menuID = @recordID.asInt.alt(0)
+        </ec:data>
+        <ec:var aMenu = @dt_menu[1]/>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Menu Name / Description" id="menuName" name="menuName" fieldValue=@menuName.alt(@aMenu[menuDescription])/>
+        <ec:input_entity title="Owned By Site" id="ownedBySiteID" name="ownedBySiteID" fieldLTID=102 fieldXID=@ownedBySiteID.alt(@aMenu[websiteID]).alt(@websiteID) filterLTID="102"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_navMenu_delete type="tComponent">
+    <ec:data xx procedure="pr_menu_delete" connection=@connection>
+        <menuID>@recordID.asInt</menuID>
+    </ec:data>
+
+    @logAction(4|@LTID|@XID|Deleted menu @recordID)
+    @notification(Menu deleted. Redirecting...||1)
+    @redirect(/console?ltid=@LTID&xid=@XID)
+</ec:object>
+
+
+
+
+
+<ec:object obj_menuItem_new title="Add Item To Menu" type="tDialogForm">
+    <ec:var parentMenuItemID = @svr[param/parentMenuItemID].nullifblank/>
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var anLTID = @svr[param/anLTID].nullifblank/>
+    <ec:var anXID = @svr[param/anXID].nullifblank/>
+    <ec:var anURL = @svr[param/anURL].nullifblank/>
+    <ec:var iconURL = @svr[param/iconURL].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@any(@all(@iv(@anLTID)|@nv(@anURL))|@all(@nv(@anLTID)|@iv(@anURL))) rem="can't have both destination URL and LTID/XID but must have at least one of them">
+            <ec:set anXID=@null if=@anLTID.isnull rem="don't submit destination XID if there is no destination LTID"/>
+
+            <ec:case>
+                <ec:case if=@iv(@description)>
+                    <ec:data xx procedure="pr_menuItem_new" connection=@connection>
+                        <menuID>@recordID.asInt</menuID>
+                        <parentMenuItemID>@parentMenuItemID.asInt</parentMenuItemID>
+                        <description>@description</description>
+                        <anLTID>@anLTID.asInt</anLTID>
+                        <anXID>@anXID.asInt</anXID>
+                        <anURL>@anURL</anURL>
+                        <iconURL>@iconURL</iconURL>
+                    </ec:data>
+                    <ec:set errMsg = @xx[errorMessage].nullifblank/>
+                    <ec:var newItemID = @xx[newMenuItemID].nullifblank/>
+
+                    <ec:case if=@nv(@errMsg)>
+                        @logAction(2|@LTID|@XID|New Menu Item ID: @newItemID)
+                        @dt_navMenus.refresh()
+                        @obj_navMenu.refresh()
+                        @close()
+                    </ec:case>
+                    <ec:case if=@else>
+                        @logError(New Menu Item Error|@errMsg|101)
+                    </ec:case>
+                </ec:case>
+                <ec:case if=@else>
+                    <ec:set errMsg="A description / title is required for a new menu item."/>
+                </ec:case>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg="Please provide one or the other but not both... URL or LTID/XID (XID optional)."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+
+        <input type="hidden" id="parentMenuItemID" name="parentMenuItemID" value="@parentMenuItemID"/>
+        <ec:input_text title="Description" id="description" name="description" maxLength="64" style="min-width:259px;" fieldValue=@description placeholder="New Menu Item"/>
+        <br/><br/>
+
+        <ec:input_number title="Goes To LTID" id="anLTID" name="anLTID" min="1" max="256" style="min-width:108px;" fieldValue=@anLTID placeholder="1 - 256"/>
+        &nbsp;&nbsp;&nbsp;
+        <ec:input_number title="Goes To XID" id="anXID" name="anXID" min="1" max="2147483647" style="min-width:128px;" fieldValue=@anXID placeholder="1 - 2147483647" hintContent="Use LTID/XID to navigate to /console pages... providing a destination URL overrides LTID/XID. XID can be left blank to navigate to record list pages or can be provided to navigate to a specific record."/>
+        <br/><br/><br/>
+
+        <ec:input_URL title="Destination URL" id="anURL" name="anURL" fieldValue=@anURL containerStyle="width:100%;" style="width:100%;" placeholder="https://www.example.com/ or /domain-url" hintContent="Leave blank to use LTID/XID ... use javascript:void(0) for no hyperlink action (ie, category/dropdown headers)."/>
+        <br/><br/>
+        <ec:input_URL title="Icon URL" id="iconURL" name="iconURL" fieldValue=@iconURL containerStyle="width:100%;" style="width:100%;" placeholder="https://www.example.com/ or /domain-url" hintContent="If LTID/XID are provided, this can be left blank as the image will be populated using the entity image. Providing this iconURL will override LTID/XID entityImg or can be used to provide an icon for non- LTID/XID menu items."/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_menuItem_edit title="Edit Menu Item" type="tDialogForm">
+    <ec:var menuItemID = @svr[param/menuItemID].nullifblank/>
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var anLTID = @svr[param/anLTID].nullifblank/>
+    <ec:var anXID = @svr[param/anXID].nullifblank/>
+    <ec:var anURL = @svr[param/anURL].nullifblank/>
+    <ec:var iconURL = @svr[param/iconURL].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@any(@all(@iv(@anLTID)|@nv(@anURL))|@all(@nv(@anLTID)|@iv(@anURL))) rem="can't have both destination URL and LTID/XID but must have at least one of them">
+            <ec:set anXID=@null if=@anLTID.isnull rem="don't submit destination XID if there is no destination LTID"/>
+
+            <ec:case>
+                <ec:case if=@iv(@description)>
+                    <ec:data xx procedure="pr_menuItem_edit" connection=@connection>
+                        <menuItemID>@menuItemID.asInt</menuItemID>
+                        <description>@description</description>
+                        <anLTID>@anLTID.asInt</anLTID>
+                        <anXID>@anXID.asInt</anXID>
+                        <anURL>@anURL</anURL>
+                        <iconURL>@iconURL</iconURL>
+                    </ec:data>
+                    <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+                    <ec:case if=@nv(@errMsg)>
+                        @logAction(3|@LTID|@XID|Edited Menu Item ID: @newItemID on menuID: @recordID)
+                        @dt_navMenus.refresh()
+                        @obj_naveMenu.refresh()
+                        @close()
+                    </ec:case>
+                    <ec:case if=@else>
+                        @logError(Edit Menu Item Error|@errMsg|101)
+                    </ec:case>
+                </ec:case>
+                <ec:case if=@else>
+                    <ec:set errMsg="A description / title is required to edit menu item."/>
+                </ec:case>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg="Please provide one or the other but not both... URL or LTID/XID (XID optional)."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_menuItem connection=@connection>
+            SELECT description, ltid, xid, URL, iconURL
+            FROM menuItems WHERE 1=1
+            AND menuID = @recordID.asInt.alt(0) AND menuItemID = @menuItemID.asInt.alt(0)
+        </ec:data>
+        <ec:var item=@dt_menuItem[1]/>
+
+        <ec:case if=@dt_menuItem.count.is(0)>
+            <ec:set errMsg="This menu item doesn't belong to this menu. Please contact a system administrator if you believe this is in error."/>
+        </ec:case>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:case if=@dt_menuItem.count.isNot(0)>
+            <input type="hidden" id="menuItemID" name="menuItemID" value="@menuItemID"/>
+            <ec:input_text title="Description" id="description" name="description" maxLength="64" style="min-width:259px;" fieldValue=@description.alt(@item[description]) placeholder="New Menu Item"/>
+            <br/><br/>
+
+            <ec:input_number title="Goes To LTID" id="anLTID" name="anLTID" min="1" max="256" style="min-width:108px;" fieldValue=@anLTID.alt(@item[ltid]) placeholder="1 - 256"/>
+            &nbsp;&nbsp;&nbsp;
+            <ec:input_number title="Goes To XID" id="anXID" name="anXID" min="1" max="2147483647" style="min-width:128px;" fieldValue=@anXID.alt(@item[xid]) placeholder="1 - 2147483647" hintContent="Use LTID/XID to navigate to /console pages... providing a destination URL overrides LTID/XID. XID can be left blank to navigate to record list pages or can be provided to navigate to a specific record."/>
+            <br/><br/><br/>
+
+            <ec:input_URL title="Destination URL" id="anURL" name="anURL" fieldValue=@anURL.alt(@item[URL]) containerStyle="width:100%;" style="width:100%;" placeholder="https://www.example.com/ or /domain-url" hintContent="Leave blank to use LTID/XID ... use javascript:void(0) for no hyperlink action (ie, category/dropdown headers)."/>
+            <br/><br/>
+            <ec:input_URL title="Icon URL" id="iconURL" name="iconURL" fieldValue=@iconURL.alt(@item[iconURL]) containerStyle="width:100%;" style="width:100%;" placeholder="https://www.example.com/ or /domain-url" hintContent="If LTID/XID are provided, this can be left blank as the image will be populated using the entity image. Providing this iconURL will override this or provide an icon for non- LTID/XID menu items."/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_menuItem_delete type="tComponent">
+    <ec:var menuItemID = @svr[param/menuItemID].nullifblank/>
+
+    <ec:case if=@iv(@menuItemID)>
+        <ec:data xx procedure="pr_menuItem_delete" connection=@connection>
+            <menuID>@recordID.asInt</menuID>
+            <menuItemID>@menuItemID.asInt</menuItemID>
+        </ec:data>
+        <ec:set errMsg = @xx[errorMessage]/>
+
+        <ec:case if=@nv(@errMsg)>
+            @logAction(4|@LTID|@XID|Deleted menuItem @menuItemID from menuID @recordID)
+            @dt_navMenus.refresh()
+            @obj_navMenu.refresh()
+        </ec:case>
+        <ec:case if=@else>
+            @logError(Delete Menu Item Error|@errMsg|101)
+            @notification(@errMsg)
+        </ec:case>
+    </ec:case>
+
+    <ec:case if=@else>
+        @notification(No menuItemID was provided. Please contact a system administrator.)
+    </ec:case>
+</ec:object>
+
+
+
+
+<ec:script if=@requestType.is(regular) rem="reinit dragDrop after reorders, edits, adds, deletes">
+    const reInitEvents = [
+        'obj_navMenu_edit',
+        'obj_menuItem_new',
+        'obj_menuItem_edit',
+        'obj_menuItem_delete',
+        'obj_navMenu_dragReorder'
+    ];
+
+    reInitEvents.forEach(anEvent => {
+        document.addEventListener(anEvent, initializeDrag);
+
+        <ec:case if=@testServer.is(1) rem="debuging tools">
+            document.addEventListener(anEvent, () => console.log('heard', anEvent));
+            console.log('reinit listener ' + anEvent);
+        </ec:case>
+    });
+</ec:script>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@recordID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Name" id="fname" name="fname" fieldValue=@fname.nullifblank/>
+        </ec:consoleSearchBox>
+        @obj_navMenus()
+    </ec:case>
+
+    <ec:case if=@iv(@recordID)>@obj_navMenu()</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+     <ec:case if=@iv(@recordID)>
+        <a href="javascript:void(0)" class="ajaxClick" ecid="obj_menuItem_new">New Menu Item<ec:icon title="Add menu item" icon="plus" direction="left" size="sml"/></a>
+     </ec:case>
+</ec:function>

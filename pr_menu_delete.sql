@@ -1,0 +1,19 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE OR ALTER PROCEDURE [dbo].[pr_menu_delete] (
+    @menuID INT
+)
+AS 
+BEGIN
+    SET XACT_ABORT ON
+    SET NOCOUNT ON
+
+    DELETE FROM menuItems
+    WHERE menuID = @menuID
+
+    DELETE FROM menus
+    WHERE menuID = @menuID
+END
+GO
